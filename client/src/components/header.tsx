@@ -63,7 +63,7 @@ export function Header({ onSearch, showSearch = true }: HeaderProps) {
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2 text-left">
                   <BookOpen className="h-5 w-5 text-primary" />
-                  LearnPath
+                  Learn Everything
                 </SheetTitle>
               </SheetHeader>
               <nav className="mt-6 flex flex-col gap-2">
@@ -87,7 +87,7 @@ export function Header({ onSearch, showSearch = true }: HeaderProps) {
           <Link href={isAuthenticated ? "/" : "/browse"} className="flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-primary" />
             <span className="hidden font-semibold sm:inline-block" data-testid="text-logo">
-              LearnPath
+              Learn Everything
             </span>
           </Link>
 

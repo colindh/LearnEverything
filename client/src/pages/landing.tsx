@@ -35,7 +35,7 @@ export default function Landing() {
         <div className="flex h-14 items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-primary" />
-            <span className="font-semibold" data-testid="text-landing-logo">LearnPath</span>
+            <span className="font-semibold" data-testid="text-landing-logo">Learn Everything</span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" asChild data-testid="button-landing-browse">
@@ -131,7 +131,7 @@ export default function Landing() {
         <div className="container mx-auto flex flex-col items-center justify-between gap-4 px-4 md:flex-row md:px-6">
           <div className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-primary" />
-            <span className="font-semibold">LearnPath</span>
+            <span className="font-semibold">Learn Everything</span>
           </div>
           <p className="text-sm text-muted-foreground" data-testid="text-footer-copyright">
             Built with care for learners everywhere
