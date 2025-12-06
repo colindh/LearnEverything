@@ -514,5 +514,77 @@ export async function registerRoutes(
     }
   });
 
+  // Bookmark routes
+  app.get("/api/bookmarks", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const bookmarks = await storage.getUserBookmarks(userId);
+      res.json(bookmarks);
+    } catch (error) {
+      console.error("Error fetching bookmarks:", error);
+      res.status(500).json({ message: "Failed to fetch bookmarks" });
+    }
+  });
+
+  app.get("/api/bookmarks/:topicId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const topicId = parseInt(req.params.topicId);
+
+      if (isNaN(topicId)) {
+        return res.status(400).json({ message: "Invalid topic ID" });
+      }
+
+      const isBookmarked = await storage.isBookmarked(userId, topicId);
+      res.json({ isBookmarked });
+    } catch (error) {
+      console.error("Error checking bookmark:", error);
+      res.status(500).json({ message: "Failed to check bookmark" });
+    }
+  });
+
+  app.post("/api/bookmarks/:topicId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const topicId = parseInt(req.params.topicId);
+
+      if (isNaN(topicId)) {
+        return res.status(400).json({ message: "Invalid topic ID" });
+      }
+
+      const topic = await storage.getTopic(topicId);
+      if (!topic) {
+        return res.status(404).json({ message: "Topic not found" });
+      }
+
+      const bookmark = await storage.addBookmark(userId, topicId);
+      res.status(201).json(bookmark);
+    } catch (error) {
+      console.error("Error adding bookmark:", error);
+      res.status(500).json({ message: "Failed to add bookmark" });
+    }
+  });
+
+  app.delete("/api/bookmarks/:topicId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const topicId = parseInt(req.params.topicId);
+
+      if (isNaN(topicId)) {
+        return res.status(400).json({ message: "Invalid topic ID" });
+      }
+
+      const removed = await storage.removeBookmark(userId, topicId);
+      if (!removed) {
+        return res.status(404).json({ message: "Bookmark not found" });
+      }
+
+      res.json({ message: "Bookmark removed successfully" });
+    } catch (error) {
+      console.error("Error removing bookmark:", error);
+      res.status(500).json({ message: "Failed to remove bookmark" });
+    }
+  });
+
   return httpServer;
 }

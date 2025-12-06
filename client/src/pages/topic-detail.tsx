@@ -19,6 +19,8 @@ import {
   Loader2,
   Lock,
   Unlock,
+  Bookmark,
+  BookmarkCheck,
 } from "lucide-react";
 import type { TopicWithRelations, UserProgress } from "@shared/schema";
 import { getModeIcon, getModeColor } from "@/components/mode-tabs";
@@ -65,6 +67,40 @@ export default function TopicDetail() {
     },
     enabled: !!id && isAuthenticated && !!topic?.prerequisites?.length,
   });
+
+  const { data: bookmarkStatus } = useQuery<{ isBookmarked: boolean }>({
+    queryKey: ["/api/bookmarks", id],
+    enabled: !!id && isAuthenticated,
+  });
+
+  const addBookmarkMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/bookmarks/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bookmarks", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bookmarks"] });
+      toast({ title: "Bookmarked!", description: "Topic saved to your collection." });
+    },
+  });
+
+  const removeBookmarkMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/bookmarks/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bookmarks", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bookmarks"] });
+      toast({ title: "Removed", description: "Topic removed from your collection." });
+    },
+  });
+
+  const isBookmarked = bookmarkStatus?.isBookmarked ?? false;
+  const bookmarkPending = addBookmarkMutation.isPending || removeBookmarkMutation.isPending;
+
+  const handleBookmarkToggle = () => {
+    if (isBookmarked) {
+      removeBookmarkMutation.mutate();
+    } else {
+      addBookmarkMutation.mutate();
+    }
+  };
 
   const hasPrerequisites = topic?.prerequisites && topic.prerequisites.length > 0;
   const isLocked = isAuthenticated && hasPrerequisites && prerequisiteStatus && !prerequisiteStatus.allCompleted;
@@ -164,9 +200,29 @@ export default function TopicDetail() {
                 )}
               </div>
 
-              <h1 className="mb-4 text-3xl font-bold md:text-4xl" data-testid="text-topic-title">
-                {topic.title}
-              </h1>
+              <div className="mb-4 flex items-start gap-3">
+                <h1 className="flex-1 text-3xl font-bold md:text-4xl" data-testid="text-topic-title">
+                  {topic.title}
+                </h1>
+                {isAuthenticated && (
+                  <Button
+                    variant={isBookmarked ? "secondary" : "outline"}
+                    size="icon"
+                    onClick={handleBookmarkToggle}
+                    disabled={bookmarkPending}
+                    className={isBookmarked ? "toggle-elevate toggle-elevated" : ""}
+                    data-testid="button-bookmark"
+                  >
+                    {bookmarkPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : isBookmarked ? (
+                      <BookmarkCheck className="h-4 w-4" />
+                    ) : (
+                      <Bookmark className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
               
               <p className="mb-6 text-lg text-muted-foreground" data-testid="text-topic-description">
                 {topic.description}

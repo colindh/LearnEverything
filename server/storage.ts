@@ -6,6 +6,7 @@ import {
   prerequisites,
   userProgress,
   assessmentSubmissions,
+  bookmarks,
   type User,
   type UpsertUser,
   type Topic,
@@ -23,6 +24,8 @@ import {
   type AssessmentSubmission,
   type InsertAssessmentSubmission,
   type AssessmentSubmissionWithDetails,
+  type Bookmark,
+  type BookmarkWithTopic,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, like, and, or, desc } from "drizzle-orm";
@@ -79,6 +82,12 @@ export interface IStorage {
     missingPrerequisites: { id: number; title: string; status: string }[];
   }>;
   getTopicsWithPrerequisiteStatus(userId: string, topicIds: number[]): Promise<Map<number, boolean>>;
+
+  // Bookmark methods
+  addBookmark(userId: string, topicId: number): Promise<Bookmark>;
+  removeBookmark(userId: string, topicId: number): Promise<boolean>;
+  getUserBookmarks(userId: string): Promise<BookmarkWithTopic[]>;
+  isBookmarked(userId: string, topicId: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -509,6 +518,59 @@ export class DatabaseStorage implements IStorage {
     }
 
     return result;
+  }
+
+  async addBookmark(userId: string, topicId: number): Promise<Bookmark> {
+    const existing = await db
+      .select()
+      .from(bookmarks)
+      .where(and(eq(bookmarks.userId, userId), eq(bookmarks.topicId, topicId)));
+
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    const [created] = await db
+      .insert(bookmarks)
+      .values({ userId, topicId })
+      .returning();
+    return created;
+  }
+
+  async removeBookmark(userId: string, topicId: number): Promise<boolean> {
+    const result = await db
+      .delete(bookmarks)
+      .where(and(eq(bookmarks.userId, userId), eq(bookmarks.topicId, topicId)))
+      .returning();
+    return result.length > 0;
+  }
+
+  async getUserBookmarks(userId: string): Promise<BookmarkWithTopic[]> {
+    const userBookmarks = await db
+      .select()
+      .from(bookmarks)
+      .where(eq(bookmarks.userId, userId))
+      .orderBy(desc(bookmarks.createdAt));
+
+    const bookmarksWithTopics = await Promise.all(
+      userBookmarks.map(async (bookmark) => {
+        const [topic] = await db
+          .select()
+          .from(topics)
+          .where(eq(topics.id, bookmark.topicId));
+        return { ...bookmark, topic };
+      })
+    );
+
+    return bookmarksWithTopics;
+  }
+
+  async isBookmarked(userId: string, topicId: number): Promise<boolean> {
+    const [bookmark] = await db
+      .select()
+      .from(bookmarks)
+      .where(and(eq(bookmarks.userId, userId), eq(bookmarks.topicId, topicId)));
+    return !!bookmark;
   }
 }
 

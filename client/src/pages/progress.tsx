@@ -1,12 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Header } from "@/components/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle2, Clock, BookOpen, ArrowRight, Trophy, Zap } from "lucide-react";
-import type { UserProgressWithTopic } from "@shared/schema";
+import { CheckCircle2, Clock, BookOpen, ArrowRight, Trophy, Zap, Bookmark, X, Loader2 } from "lucide-react";
+import type { UserProgressWithTopic, BookmarkWithTopic } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 function StatCard({ 
   title, 
@@ -118,13 +120,100 @@ function ProgressCard({ progress }: { progress: UserProgressWithTopic }) {
   );
 }
 
+function BookmarkCard({ 
+  bookmark, 
+  onRemove, 
+  isRemoving 
+}: { 
+  bookmark: BookmarkWithTopic; 
+  onRemove: () => void;
+  isRemoving: boolean;
+}) {
+  const topic = bookmark.topic;
+
+  if (!topic) return null;
+
+  const modeLabels: Record<string, string> = {
+    skill: "Skill Mode",
+    school: "School Mode",
+    task: "Task Mode",
+  };
+
+  return (
+    <Card data-testid={`card-bookmark-${bookmark.id}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-4">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-muted">
+            {topic.imageUrl ? (
+              <img 
+                src={topic.imageUrl} 
+                alt={topic.title}
+                className="h-full w-full rounded-lg object-cover"
+              />
+            ) : (
+              <Bookmark className="h-8 w-8 text-muted-foreground" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold truncate" data-testid={`text-bookmark-title-${bookmark.id}`}>
+                {topic.title}
+              </h3>
+            </div>
+            <p className="mb-3 text-sm text-muted-foreground">
+              {modeLabels[topic.mode] || topic.mode}
+              {topic.estimatedMinutes && ` • ${topic.estimatedMinutes} min`}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href={`/topic/${topic.id}`}>
+                <Button size="sm" data-testid={`button-view-bookmark-${bookmark.id}`}>
+                  View Topic
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+              </Link>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={onRemove}
+                disabled={isRemoving}
+                data-testid={`button-remove-bookmark-${bookmark.id}`}
+              >
+                {isRemoving ? (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                ) : (
+                  <X className="mr-1 h-4 w-4" />
+                )}
+                Remove
+              </Button>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Progress() {
+  const { toast } = useToast();
+
   const { data: progressList, isLoading: isLoadingProgress } = useQuery<UserProgressWithTopic[]>({
     queryKey: ["/api/progress"],
   });
 
   const { data: stats, isLoading: isLoadingStats } = useQuery<{ completed: number; inProgress: number }>({
     queryKey: ["/api/progress/stats"],
+  });
+
+  const { data: bookmarks, isLoading: isLoadingBookmarks } = useQuery<BookmarkWithTopic[]>({
+    queryKey: ["/api/bookmarks"],
+  });
+
+  const removeBookmarkMutation = useMutation({
+    mutationFn: (topicId: number) => apiRequest("DELETE", `/api/bookmarks/${topicId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bookmarks"] });
+      toast({ title: "Removed", description: "Topic removed from your bookmarks." });
+    },
   });
 
   const inProgressItems = progressList?.filter((p) => p.status === "in_progress") || [];
@@ -194,6 +283,34 @@ export default function Progress() {
               </div>
             </section>
           )}
+
+          {isLoadingBookmarks ? (
+            <section className="mb-8">
+              <h2 className="mb-4 text-xl font-semibold">Bookmarked Topics</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <ProgressCardSkeleton key={i} />
+                ))}
+              </div>
+            </section>
+          ) : bookmarks && bookmarks.length > 0 ? (
+            <section className="mb-8">
+              <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold" data-testid="text-bookmarks-section">
+                <Bookmark className="h-5 w-5" />
+                Bookmarked Topics
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {bookmarks.map((bookmark) => (
+                  <BookmarkCard 
+                    key={bookmark.id} 
+                    bookmark={bookmark} 
+                    onRemove={() => bookmark.topic && removeBookmarkMutation.mutate(bookmark.topic.id)}
+                    isRemoving={removeBookmarkMutation.isPending}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {isLoadingProgress ? (
             <div className="grid gap-4 md:grid-cols-2">
