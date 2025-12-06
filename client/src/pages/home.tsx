@@ -1,18 +1,26 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { ModeTabs } from "@/components/mode-tabs";
 import { TopicCard, TopicCardSkeleton } from "@/components/topic-card";
 import { Input } from "@/components/ui/input";
 import { Search, BookOpen, Frown } from "lucide-react";
-import type { Topic, LearningMode } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
+import type { Topic, LearningMode, UserProgressWithTopic } from "@shared/schema";
 
 export default function Home() {
   const [activeMode, setActiveMode] = useState<LearningMode | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const { isAuthenticated } = useAuth();
 
   const { data: topics, isLoading } = useQuery<Topic[]>({
     queryKey: ["/api/topics", { mode: activeMode !== "all" ? activeMode : undefined, search: searchQuery || undefined }],
+  });
+
+  const { data: userProgress } = useQuery<UserProgressWithTopic[]>({
+    queryKey: ["/api/progress"],
+    enabled: isAuthenticated,
   });
 
   const filteredTopics = topics?.filter((topic) => {
@@ -22,6 +30,35 @@ export default function Home() {
       topic.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesMode && matchesSearch && topic.isPublished;
   });
+
+  const topicIds = useMemo(() => filteredTopics?.map(t => t.id) || [], [filteredTopics]);
+
+  const { data: prerequisiteStatus } = useQuery<Record<number, boolean>>({
+    queryKey: ["/api/topics/prerequisites-status", topicIds],
+    queryFn: async () => {
+      if (topicIds.length === 0) return {};
+      const res = await apiRequest("POST", "/api/topics/prerequisites-status", { topicIds });
+      return res.json();
+    },
+    enabled: isAuthenticated && topicIds.length > 0,
+  });
+
+  const completedTopicIds = useMemo(() => {
+    return new Set(
+      (userProgress || [])
+        .filter(p => p.status === "completed")
+        .map(p => p.topicId)
+    );
+  }, [userProgress]);
+
+  const lockedTopicIds = useMemo(() => {
+    if (!prerequisiteStatus) return new Set<number>();
+    return new Set(
+      Object.entries(prerequisiteStatus)
+        .filter(([_, unlocked]) => !unlocked)
+        .map(([id]) => parseInt(id))
+    );
+  }, [prerequisiteStatus]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -64,7 +101,12 @@ export default function Home() {
           ) : filteredTopics && filteredTopics.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredTopics.map((topic) => (
-                <TopicCard key={topic.id} topic={topic} />
+                <TopicCard 
+                  key={topic.id} 
+                  topic={topic} 
+                  isLocked={lockedTopicIds.has(topic.id)}
+                  isCompleted={completedTopicIds.has(topic.id)}
+                />
               ))}
             </div>
           ) : (

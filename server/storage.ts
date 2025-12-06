@@ -72,6 +72,13 @@ export interface IStorage {
   getUserSubmissions(userId: string): Promise<AssessmentSubmissionWithDetails[]>;
   getSubmissionsByAssessment(assessmentId: number): Promise<AssessmentSubmission[]>;
   getSubmission(userId: string, assessmentId: number): Promise<AssessmentSubmission | undefined>;
+
+  // Prerequisite validation methods
+  checkPrerequisites(userId: string, topicId: number): Promise<{
+    allCompleted: boolean;
+    missingPrerequisites: { id: number; title: string; status: string }[];
+  }>;
+  getTopicsWithPrerequisiteStatus(userId: string, topicIds: number[]): Promise<Map<number, boolean>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -412,6 +419,96 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return submission;
+  }
+
+  async checkPrerequisites(userId: string, topicId: number): Promise<{
+    allCompleted: boolean;
+    missingPrerequisites: { id: number; title: string; status: string }[];
+  }> {
+    const topicPrereqs = await db
+      .select()
+      .from(prerequisites)
+      .where(eq(prerequisites.topicId, topicId));
+
+    if (topicPrereqs.length === 0) {
+      return { allCompleted: true, missingPrerequisites: [] };
+    }
+
+    const missingPrerequisites: { id: number; title: string; status: string }[] = [];
+
+    for (const prereq of topicPrereqs) {
+      const [prereqTopic] = await db
+        .select()
+        .from(topics)
+        .where(eq(topics.id, prereq.prerequisiteTopicId));
+
+      if (!prereqTopic) {
+        missingPrerequisites.push({
+          id: prereq.prerequisiteTopicId,
+          title: "Missing Topic",
+          status: "unavailable",
+        });
+        continue;
+      }
+
+      const [progress] = await db
+        .select()
+        .from(userProgress)
+        .where(
+          and(
+            eq(userProgress.userId, userId),
+            eq(userProgress.topicId, prereq.prerequisiteTopicId)
+          )
+        );
+
+      if (!progress || progress.status !== "completed") {
+        missingPrerequisites.push({
+          id: prereqTopic.id,
+          title: prereqTopic.title,
+          status: progress?.status || "not_started",
+        });
+      }
+    }
+
+    return {
+      allCompleted: missingPrerequisites.length === 0,
+      missingPrerequisites,
+    };
+  }
+
+  async getTopicsWithPrerequisiteStatus(userId: string, topicIds: number[]): Promise<Map<number, boolean>> {
+    const result = new Map<number, boolean>();
+
+    const completedProgress = await db
+      .select()
+      .from(userProgress)
+      .where(and(eq(userProgress.userId, userId), eq(userProgress.status, "completed")));
+
+    const completedTopicIds = new Set(completedProgress.map((p) => p.topicId));
+
+    const allTopics = await db.select({ id: topics.id }).from(topics);
+    const existingTopicIds = new Set(allTopics.map((t) => t.id));
+
+    for (const topicId of topicIds) {
+      const topicPrereqs = await db
+        .select()
+        .from(prerequisites)
+        .where(eq(prerequisites.topicId, topicId));
+
+      if (topicPrereqs.length === 0) {
+        result.set(topicId, true);
+      } else {
+        const allCompleted = topicPrereqs.every((prereq) => {
+          if (!existingTopicIds.has(prereq.prerequisiteTopicId)) {
+            return false;
+          }
+          return completedTopicIds.has(prereq.prerequisiteTopicId);
+        });
+        result.set(topicId, allCompleted);
+      }
+    }
+
+    return result;
   }
 }
 

@@ -469,5 +469,50 @@ export async function registerRoutes(
     }
   });
 
+  // Prerequisite validation routes
+  app.get("/api/topics/:id/prerequisites", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const topicId = parseInt(req.params.id);
+
+      if (isNaN(topicId)) {
+        return res.status(400).json({ message: "Invalid topic ID" });
+      }
+
+      const topic = await storage.getTopic(topicId);
+      if (!topic) {
+        return res.status(404).json({ message: "Topic not found" });
+      }
+
+      const prerequisiteStatus = await storage.checkPrerequisites(userId, topicId);
+      res.json(prerequisiteStatus);
+    } catch (error) {
+      console.error("Error checking prerequisites:", error);
+      res.status(500).json({ message: "Failed to check prerequisites" });
+    }
+  });
+
+  app.post("/api/topics/prerequisites-status", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { topicIds } = req.body;
+
+      if (!Array.isArray(topicIds)) {
+        return res.status(400).json({ message: "topicIds must be an array" });
+      }
+
+      const statusMap = await storage.getTopicsWithPrerequisiteStatus(userId, topicIds);
+      const result: Record<number, boolean> = {};
+      statusMap.forEach((value, key) => {
+        result[key] = value;
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error checking prerequisites status:", error);
+      res.status(500).json({ message: "Failed to check prerequisites status" });
+    }
+  });
+
   return httpServer;
 }

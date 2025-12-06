@@ -17,6 +17,8 @@ import {
   FileQuestion,
   Trophy,
   Loader2,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import type { TopicWithRelations, UserProgress } from "@shared/schema";
 import { getModeIcon, getModeColor } from "@/components/mode-tabs";
@@ -50,6 +52,22 @@ export default function TopicDetail() {
     queryKey: ["/api/progress", id],
     enabled: !!id && isAuthenticated,
   });
+
+  const { data: prerequisiteStatus } = useQuery<{
+    allCompleted: boolean;
+    missingPrerequisites: { id: number; title: string; status: string }[];
+  }>({
+    queryKey: ["/api/topics", id, "prerequisites"],
+    queryFn: async () => {
+      const res = await fetch(`/api/topics/${id}/prerequisites`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch prerequisites");
+      return res.json();
+    },
+    enabled: !!id && isAuthenticated && !!topic?.prerequisites?.length,
+  });
+
+  const hasPrerequisites = topic?.prerequisites && topic.prerequisites.length > 0;
+  const isLocked = isAuthenticated && hasPrerequisites && prerequisiteStatus && !prerequisiteStatus.allCompleted;
 
   const startMutation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/progress/${id}/start`),
@@ -272,29 +290,58 @@ export default function TopicDetail() {
               {topic.prerequisites && topic.prerequisites.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Prerequisites</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      {isLocked ? (
+                        <Lock className="h-4 w-4 text-destructive" />
+                      ) : isAuthenticated ? (
+                        <Unlock className="h-4 w-4 text-chart-2" />
+                      ) : null}
+                      Prerequisites
+                    </CardTitle>
                     <CardDescription>
-                      Complete these topics first for the best learning experience
+                      {isLocked
+                        ? "Complete these topics to unlock this content"
+                        : "Complete these topics first for the best learning experience"}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
-                      {topic.prerequisites.map((prereq) => (
-                        <Link
-                          key={prereq.id}
-                          href={`/topic/${prereq.prerequisiteTopicId}`}
-                        >
-                          <div
-                            className="flex items-center gap-2 rounded-md p-2 hover-elevate cursor-pointer"
-                            data-testid={`prereq-item-${prereq.id}`}
+                      {topic.prerequisites.map((prereq) => {
+                        const isMissing = prerequisiteStatus?.missingPrerequisites?.some(
+                          (m) => m.id === prereq.prerequisiteTopicId
+                        );
+                        const isCompleted = isAuthenticated && prerequisiteStatus && !isMissing;
+
+                        return (
+                          <Link
+                            key={prereq.id}
+                            href={`/topic/${prereq.prerequisiteTopicId}`}
                           >
-                            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">
-                              {prereq.prerequisiteTopic?.title || `Topic #${prereq.prerequisiteTopicId}`}
-                            </span>
-                          </div>
-                        </Link>
-                      ))}
+                            <div
+                              className="flex items-center gap-2 rounded-md p-2 hover-elevate cursor-pointer"
+                              data-testid={`prereq-item-${prereq.id}`}
+                            >
+                              {isAuthenticated ? (
+                                isCompleted ? (
+                                  <CheckCircle2 className="h-4 w-4 text-chart-2" />
+                                ) : (
+                                  <AlertCircle className="h-4 w-4 text-destructive" />
+                                )
+                              ) : (
+                                <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+                              )}
+                              <span className={`text-sm ${isMissing ? "text-destructive" : ""}`}>
+                                {prereq.prerequisiteTopic?.title || `Topic #${prereq.prerequisiteTopicId}`}
+                              </span>
+                              {isCompleted && (
+                                <Badge variant="secondary" className="ml-auto bg-chart-2/10 text-chart-2">
+                                  Done
+                                </Badge>
+                              )}
+                            </div>
+                          </Link>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
@@ -338,7 +385,33 @@ export default function TopicDetail() {
                     <CardTitle className="text-lg">Your Progress</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {progress?.status === "completed" ? (
+                    {isLocked ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 rounded-lg bg-destructive/10 p-3">
+                          <Lock className="h-6 w-6 text-destructive" />
+                          <div>
+                            <p className="font-medium" data-testid="text-topic-locked">Locked</p>
+                            <p className="text-sm text-muted-foreground">
+                              Complete prerequisites to unlock
+                            </p>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Missing prerequisites:</p>
+                          {prerequisiteStatus?.missingPrerequisites.map((prereq) => (
+                            <Link key={prereq.id} href={`/topic/${prereq.id}`}>
+                              <div className="flex items-center gap-2 rounded-md border p-2 hover-elevate cursor-pointer" data-testid={`missing-prereq-${prereq.id}`}>
+                                <AlertCircle className="h-4 w-4 text-destructive" />
+                                <span className="text-sm">{prereq.title}</span>
+                                <Badge variant="outline" className="ml-auto">
+                                  {prereq.status === "in_progress" ? "In Progress" : "Not Started"}
+                                </Badge>
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    ) : progress?.status === "completed" ? (
                       <div className="flex items-center gap-3 rounded-lg bg-primary/10 p-3">
                         <Trophy className="h-6 w-6 text-primary" />
                         <div>
