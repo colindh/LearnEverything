@@ -7,7 +7,9 @@ import {
   insertLessonSchema,
   insertAssessmentSchema,
   insertPrerequisiteSchema,
+  insertAssessmentSubmissionSchema,
   type LearningMode,
+  type Assessment,
   learningModes,
 } from "@shared/schema";
 import { z } from "zod";
@@ -359,6 +361,111 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error completing topic:", error);
       res.status(500).json({ message: "Failed to complete topic" });
+    }
+  });
+
+  // Assessment routes
+  app.get("/api/assessments/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid assessment ID" });
+      }
+
+      const assessment = await storage.getAssessment(id);
+      if (!assessment) {
+        return res.status(404).json({ message: "Assessment not found" });
+      }
+
+      res.json(assessment);
+    } catch (error) {
+      console.error("Error fetching assessment:", error);
+      res.status(500).json({ message: "Failed to fetch assessment" });
+    }
+  });
+
+  // Assessment Submission routes
+  app.get("/api/submissions", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const submissions = await storage.getUserSubmissions(userId);
+      res.json(submissions);
+    } catch (error) {
+      console.error("Error fetching submissions:", error);
+      res.status(500).json({ message: "Failed to fetch submissions" });
+    }
+  });
+
+  app.get("/api/submissions/:assessmentId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const assessmentId = parseInt(req.params.assessmentId);
+
+      if (isNaN(assessmentId)) {
+        return res.status(400).json({ message: "Invalid assessment ID" });
+      }
+
+      const submission = await storage.getSubmission(userId, assessmentId);
+      res.json(submission || null);
+    } catch (error) {
+      console.error("Error fetching submission:", error);
+      res.status(500).json({ message: "Failed to fetch submission" });
+    }
+  });
+
+  app.post("/api/submissions/:assessmentId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const assessmentId = parseInt(req.params.assessmentId);
+
+      if (isNaN(assessmentId)) {
+        return res.status(400).json({ message: "Invalid assessment ID" });
+      }
+
+      const assessment = await storage.getAssessment(assessmentId);
+      if (!assessment) {
+        return res.status(404).json({ message: "Assessment not found" });
+      }
+
+      const { answers } = req.body;
+      if (!answers || typeof answers !== "object") {
+        return res.status(400).json({ message: "Answers are required" });
+      }
+
+      // Auto-grade the assessment
+      const questions = (assessment.questions as any[]) || [];
+      let correctCount = 0;
+      const totalQuestions = questions.length;
+
+      for (const question of questions) {
+        const userAnswer = answers[question.id];
+        if (userAnswer !== undefined && userAnswer === question.correctAnswer) {
+          correctCount++;
+        }
+      }
+
+      const score = totalQuestions > 0 
+        ? Math.round((correctCount / totalQuestions) * 100) 
+        : 0;
+      const passingScore = assessment.passingScore || 70;
+      const passed = score >= passingScore;
+
+      const submissionData = insertAssessmentSubmissionSchema.parse({
+        userId,
+        assessmentId,
+        answers,
+        score,
+        passed,
+      });
+
+      const submission = await storage.submitAssessment(submissionData);
+      res.status(201).json(submission);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      console.error("Error submitting assessment:", error);
+      res.status(500).json({ message: "Failed to submit assessment" });
     }
   });
 

@@ -5,6 +5,7 @@ import {
   assessments,
   prerequisites,
   userProgress,
+  assessmentSubmissions,
   type User,
   type UpsertUser,
   type Topic,
@@ -19,6 +20,9 @@ import {
   type LearningMode,
   type UserProgress,
   type UserProgressWithTopic,
+  type AssessmentSubmission,
+  type InsertAssessmentSubmission,
+  type AssessmentSubmissionWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, like, and, or, desc } from "drizzle-orm";
@@ -59,6 +63,15 @@ export interface IStorage {
   startTopic(userId: string, topicId: number): Promise<UserProgress>;
   completeTopic(userId: string, topicId: number): Promise<UserProgress>;
   getUserStats(userId: string): Promise<{ completed: number; inProgress: number }>;
+
+  // Assessment methods
+  getAssessment(id: number): Promise<Assessment | undefined>;
+
+  // Assessment Submission methods
+  submitAssessment(submission: InsertAssessmentSubmission): Promise<AssessmentSubmission>;
+  getUserSubmissions(userId: string): Promise<AssessmentSubmissionWithDetails[]>;
+  getSubmissionsByAssessment(assessmentId: number): Promise<AssessmentSubmission[]>;
+  getSubmission(userId: string, assessmentId: number): Promise<AssessmentSubmission | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -342,6 +355,63 @@ export class DatabaseStorage implements IStorage {
       completed: progressList.filter((p) => p.status === "completed").length,
       inProgress: progressList.filter((p) => p.status === "in_progress").length,
     };
+  }
+
+  async getAssessment(id: number): Promise<Assessment | undefined> {
+    const [assessment] = await db
+      .select()
+      .from(assessments)
+      .where(eq(assessments.id, id));
+    return assessment;
+  }
+
+  async submitAssessment(submission: InsertAssessmentSubmission): Promise<AssessmentSubmission> {
+    const [created] = await db
+      .insert(assessmentSubmissions)
+      .values(submission)
+      .returning();
+    return created;
+  }
+
+  async getUserSubmissions(userId: string): Promise<AssessmentSubmissionWithDetails[]> {
+    const submissions = await db
+      .select()
+      .from(assessmentSubmissions)
+      .where(eq(assessmentSubmissions.userId, userId))
+      .orderBy(desc(assessmentSubmissions.submittedAt));
+
+    const submissionsWithDetails = await Promise.all(
+      submissions.map(async (submission) => {
+        const [assessment] = await db
+          .select()
+          .from(assessments)
+          .where(eq(assessments.id, submission.assessmentId));
+        return { ...submission, assessment };
+      })
+    );
+
+    return submissionsWithDetails;
+  }
+
+  async getSubmissionsByAssessment(assessmentId: number): Promise<AssessmentSubmission[]> {
+    return db
+      .select()
+      .from(assessmentSubmissions)
+      .where(eq(assessmentSubmissions.assessmentId, assessmentId))
+      .orderBy(desc(assessmentSubmissions.submittedAt));
+  }
+
+  async getSubmission(userId: string, assessmentId: number): Promise<AssessmentSubmission | undefined> {
+    const [submission] = await db
+      .select()
+      .from(assessmentSubmissions)
+      .where(
+        and(
+          eq(assessmentSubmissions.userId, userId),
+          eq(assessmentSubmissions.assessmentId, assessmentId)
+        )
+      );
+    return submission;
   }
 }
 

@@ -238,7 +238,7 @@ export default function TopicDetail() {
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <h4 className="font-medium">{assessment.title}</h4>
-                                <Badge variant="outline" size="sm">
+                                <Badge variant="outline">
                                   {typeConfig.label}
                                 </Badge>
                               </div>
@@ -253,6 +253,12 @@ export default function TopicDetail() {
                                 </p>
                               )}
                             </div>
+                            <Link href={`/assessment/${assessment.id}`}>
+                              <Button size="sm" data-testid={`button-take-assessment-${assessment.id}`}>
+                                <Play className="mr-1 h-3 w-3" />
+                                Take
+                              </Button>
+                            </Link>
                           </div>
                         );
                       })}

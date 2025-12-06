@@ -10,6 +10,7 @@ import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import TopicDetail from "@/pages/topic-detail";
 import Progress from "@/pages/progress";
+import Assessment from "@/pages/assessment";
 import Admin from "@/pages/admin";
 import TopicEditor from "@/pages/topic-editor";
 
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/" component={isAuthenticated ? Home : Landing} />
       <Route path="/browse" component={Home} />
       <Route path="/topic/:id" component={TopicDetail} />
+      <Route path="/assessment/:id" component={Assessment} />
       {isAuthenticated && <Route path="/progress" component={Progress} />}
       {isAdmin && (
         <>
