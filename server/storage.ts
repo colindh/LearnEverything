@@ -4,6 +4,7 @@ import {
   lessons,
   assessments,
   prerequisites,
+  userProgress,
   type User,
   type UpsertUser,
   type Topic,
@@ -16,6 +17,8 @@ import {
   type InsertPrerequisite,
   type TopicWithRelations,
   type LearningMode,
+  type UserProgress,
+  type UserProgressWithTopic,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, like, and, or, desc } from "drizzle-orm";
@@ -49,6 +52,13 @@ export interface IStorage {
   deletePrerequisitesByTopicId(topicId: number): Promise<boolean>;
 
   getStats(): Promise<{ totalTopics: number; publishedTopics: number; totalLessons: number }>;
+
+  // User Progress methods
+  getUserProgress(userId: string): Promise<UserProgressWithTopic[]>;
+  getTopicProgress(userId: string, topicId: number): Promise<UserProgress | undefined>;
+  startTopic(userId: string, topicId: number): Promise<UserProgress>;
+  completeTopic(userId: string, topicId: number): Promise<UserProgress>;
+  getUserStats(userId: string): Promise<{ completed: number; inProgress: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -246,6 +256,91 @@ export class DatabaseStorage implements IStorage {
       totalTopics: allTopics.length,
       publishedTopics: allTopics.filter((t) => t.isPublished).length,
       totalLessons: allLessons.length,
+    };
+  }
+
+  async getUserProgress(userId: string): Promise<UserProgressWithTopic[]> {
+    const progressList = await db
+      .select()
+      .from(userProgress)
+      .where(eq(userProgress.userId, userId))
+      .orderBy(desc(userProgress.updatedAt));
+
+    const progressWithTopics = await Promise.all(
+      progressList.map(async (progress) => {
+        const [topic] = await db
+          .select()
+          .from(topics)
+          .where(eq(topics.id, progress.topicId));
+        return { ...progress, topic };
+      })
+    );
+
+    return progressWithTopics;
+  }
+
+  async getTopicProgress(userId: string, topicId: number): Promise<UserProgress | undefined> {
+    const [progress] = await db
+      .select()
+      .from(userProgress)
+      .where(and(eq(userProgress.userId, userId), eq(userProgress.topicId, topicId)));
+    return progress;
+  }
+
+  async startTopic(userId: string, topicId: number): Promise<UserProgress> {
+    const existing = await this.getTopicProgress(userId, topicId);
+    if (existing) {
+      return existing;
+    }
+
+    const [created] = await db
+      .insert(userProgress)
+      .values({
+        userId,
+        topicId,
+        status: "in_progress",
+      })
+      .returning();
+    return created;
+  }
+
+  async completeTopic(userId: string, topicId: number): Promise<UserProgress> {
+    const existing = await this.getTopicProgress(userId, topicId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(userProgress)
+        .set({
+          status: "completed",
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(userProgress.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const [created] = await db
+      .insert(userProgress)
+      .values({
+        userId,
+        topicId,
+        status: "completed",
+        completedAt: new Date(),
+      })
+      .returning();
+    return created;
+  }
+
+  async getUserStats(userId: string): Promise<{ completed: number; inProgress: number }> {
+    const progressList = await db
+      .select()
+      .from(userProgress)
+      .where(eq(userProgress.userId, userId));
+
+    return {
+      completed: progressList.filter((p) => p.status === "completed").length,
+      inProgress: progressList.filter((p) => p.status === "in_progress").length,
     };
   }
 }

@@ -278,5 +278,89 @@ export async function registerRoutes(
     }
   });
 
+  // User Progress routes
+  app.get("/api/progress", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const progress = await storage.getUserProgress(userId);
+      res.json(progress);
+    } catch (error) {
+      console.error("Error fetching progress:", error);
+      res.status(500).json({ message: "Failed to fetch progress" });
+    }
+  });
+
+  app.get("/api/progress/stats", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const stats = await storage.getUserStats(userId);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/progress/:topicId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const topicId = parseInt(req.params.topicId);
+      
+      if (isNaN(topicId)) {
+        return res.status(400).json({ message: "Invalid topic ID" });
+      }
+
+      const progress = await storage.getTopicProgress(userId, topicId);
+      res.json(progress || null);
+    } catch (error) {
+      console.error("Error fetching topic progress:", error);
+      res.status(500).json({ message: "Failed to fetch topic progress" });
+    }
+  });
+
+  app.post("/api/progress/:topicId/start", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const topicId = parseInt(req.params.topicId);
+      
+      if (isNaN(topicId)) {
+        return res.status(400).json({ message: "Invalid topic ID" });
+      }
+
+      const topic = await storage.getTopic(topicId);
+      if (!topic) {
+        return res.status(404).json({ message: "Topic not found" });
+      }
+
+      const progress = await storage.startTopic(userId, topicId);
+      res.json(progress);
+    } catch (error) {
+      console.error("Error starting topic:", error);
+      res.status(500).json({ message: "Failed to start topic" });
+    }
+  });
+
+  app.post("/api/progress/:topicId/complete", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const topicId = parseInt(req.params.topicId);
+      
+      if (isNaN(topicId)) {
+        return res.status(400).json({ message: "Invalid topic ID" });
+      }
+
+      const topic = await storage.getTopic(topicId);
+      if (!topic) {
+        return res.status(404).json({ message: "Topic not found" });
+      }
+
+      const progress = await storage.completeTopic(userId, topicId);
+      res.json(progress);
+    } catch (error) {
+      console.error("Error completing topic:", error);
+      res.status(500).json({ message: "Failed to complete topic" });
+    }
+  });
+
   return httpServer;
 }

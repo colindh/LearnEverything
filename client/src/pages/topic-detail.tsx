@@ -1,5 +1,5 @@
 import { useParams, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,9 +15,14 @@ import {
   CheckCircle2,
   AlertCircle,
   FileQuestion,
+  Trophy,
+  Loader2,
 } from "lucide-react";
-import type { TopicWithRelations, LearningMode } from "@shared/schema";
+import type { TopicWithRelations, UserProgress } from "@shared/schema";
 import { getModeIcon, getModeColor } from "@/components/mode-tabs";
+import { useAuth } from "@/hooks/useAuth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const difficultyConfig = {
   beginner: { label: "Beginner", class: "bg-chart-2/10 text-chart-2" },
@@ -33,10 +38,37 @@ const assessmentTypeConfig = {
 
 export default function TopicDetail() {
   const { id } = useParams<{ id: string }>();
+  const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
 
   const { data: topic, isLoading, error } = useQuery<TopicWithRelations>({
     queryKey: ["/api/topics", id],
     enabled: !!id,
+  });
+
+  const { data: progress } = useQuery<UserProgress | null>({
+    queryKey: ["/api/progress", id],
+    enabled: !!id && isAuthenticated,
+  });
+
+  const startMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/progress/${id}/start`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/progress", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress/stats"] });
+      toast({ title: "Topic started!", description: "Your progress is now being tracked." });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/progress/${id}/complete`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/progress", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress/stats"] });
+      toast({ title: "Topic completed!", description: "Great job finishing this topic!" });
+    },
   });
 
   if (isLoading) {
@@ -75,8 +107,8 @@ export default function TopicDetail() {
     );
   }
 
-  const ModeIcon = getModeIcon(topic.mode as LearningMode);
-  const modeColorClass = getModeColor(topic.mode as LearningMode);
+  const ModeIcon = getModeIcon(topic.mode);
+  const modeColorClass = getModeColor(topic.mode);
   const difficulty = difficultyConfig[topic.difficulty as keyof typeof difficultyConfig] || difficultyConfig.beginner;
 
   return (
@@ -293,6 +325,66 @@ export default function TopicDetail() {
                   </div>
                 </CardContent>
               </Card>
+
+              {isAuthenticated && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Your Progress</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {progress?.status === "completed" ? (
+                      <div className="flex items-center gap-3 rounded-lg bg-primary/10 p-3">
+                        <Trophy className="h-6 w-6 text-primary" />
+                        <div>
+                          <p className="font-medium" data-testid="text-progress-completed">Completed</p>
+                          <p className="text-sm text-muted-foreground">
+                            Great job finishing this topic!
+                          </p>
+                        </div>
+                      </div>
+                    ) : progress?.status === "in_progress" ? (
+                      <>
+                        <div className="flex items-center gap-3 rounded-lg bg-secondary/10 p-3">
+                          <Clock className="h-6 w-6 text-secondary-foreground" />
+                          <div>
+                            <p className="font-medium" data-testid="text-progress-in-progress">In Progress</p>
+                            <p className="text-sm text-muted-foreground">
+                              Keep going, you're doing great!
+                            </p>
+                          </div>
+                        </div>
+                        <Button 
+                          className="w-full" 
+                          onClick={() => completeMutation.mutate()}
+                          disabled={completeMutation.isPending}
+                          data-testid="button-complete-topic"
+                        >
+                          {completeMutation.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                          )}
+                          Mark as Complete
+                        </Button>
+                      </>
+                    ) : (
+                      <Button 
+                        className="w-full" 
+                        onClick={() => startMutation.mutate()}
+                        disabled={startMutation.isPending}
+                        data-testid="button-start-topic"
+                      >
+                        {startMutation.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Play className="mr-2 h-4 w-4" />
+                        )}
+                        Start Learning
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>

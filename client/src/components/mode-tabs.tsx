@@ -1,5 +1,5 @@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Wrench, GraduationCap, CheckSquare } from "lucide-react";
+import { Wrench, GraduationCap, CheckSquare, BookOpen } from "lucide-react";
 import type { LearningMode } from "@shared/schema";
 
 interface ModeTabsProps {
@@ -60,20 +60,20 @@ export function ModeTabs({ activeMode, onModeChange }: ModeTabsProps) {
   );
 }
 
-export function getModeIcon(mode: LearningMode) {
-  const icons = {
+export function getModeIcon(mode: LearningMode | string) {
+  const icons: Record<string, typeof BookOpen> = {
     skill: Wrench,
     school: GraduationCap,
     task: CheckSquare,
   };
-  return icons[mode];
+  return icons[mode] || BookOpen;
 }
 
-export function getModeColor(mode: LearningMode) {
-  const colors = {
+export function getModeColor(mode: LearningMode | string) {
+  const colors: Record<string, string> = {
     skill: "bg-chart-3/10 text-chart-3 border-chart-3/20",
     school: "bg-chart-1/10 text-chart-1 border-chart-1/20",
     task: "bg-chart-2/10 text-chart-2 border-chart-2/20",
   };
-  return colors[mode];
+  return colors[mode] || "bg-muted text-muted-foreground border-muted";
 }

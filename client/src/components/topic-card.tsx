@@ -1,10 +1,9 @@
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, BookOpen, ArrowRight } from "lucide-react";
+import { Clock, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import type { Topic } from "@shared/schema";
 import { getModeIcon, getModeColor } from "./mode-tabs";
-import type { LearningMode } from "@shared/schema";
 
 interface TopicCardProps {
   topic: Topic;
@@ -17,8 +16,8 @@ const difficultyConfig = {
 };
 
 export function TopicCard({ topic }: TopicCardProps) {
-  const ModeIcon = getModeIcon(topic.mode as LearningMode);
-  const modeColorClass = getModeColor(topic.mode as LearningMode);
+  const ModeIcon = getModeIcon(topic.mode);
+  const modeColorClass = getModeColor(topic.mode);
   const difficulty = difficultyConfig[topic.difficulty as keyof typeof difficultyConfig] || difficultyConfig.beginner;
 
   return (

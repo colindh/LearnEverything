@@ -9,6 +9,7 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import TopicDetail from "@/pages/topic-detail";
+import Progress from "@/pages/progress";
 import Admin from "@/pages/admin";
 import TopicEditor from "@/pages/topic-editor";
 
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/" component={isAuthenticated ? Home : Landing} />
       <Route path="/browse" component={Home} />
       <Route path="/topic/:id" component={TopicDetail} />
+      {isAuthenticated && <Route path="/progress" component={Progress} />}
       {isAdmin && (
         <>
           <Route path="/admin" component={Admin} />

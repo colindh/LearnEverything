@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Search, Menu, LogOut, User, Settings, BookOpen } from "lucide-react";
+import { Search, Menu, LogOut, User, Settings, BookOpen, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -45,6 +45,7 @@ export function Header({ onSearch, showSearch = true }: HeaderProps) {
 
   const navItems = [
     { href: isAuthenticated ? "/" : "/browse", label: "Home", icon: BookOpen },
+    ...(isAuthenticated ? [{ href: "/progress", label: "My Progress", icon: TrendingUp }] : []),
     ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: Settings }] : []),
   ];
 
