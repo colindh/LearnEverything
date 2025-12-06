@@ -129,6 +129,70 @@ export const assessmentsRelations = relations(assessments, ({ one }) => ({
   }),
 }));
 
+// User Progress - tracks completed topics
+export const userProgress = pgTable("user_progress", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  topicId: integer("topic_id").references(() => topics.id, { onDelete: "cascade" }).notNull(),
+  status: varchar("status", { length: 20 }).default("in_progress").notNull(), // "in_progress", "completed"
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Assessment Submissions - tracks user answers and scores
+export const assessmentSubmissions = pgTable("assessment_submissions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  assessmentId: integer("assessment_id").references(() => assessments.id, { onDelete: "cascade" }).notNull(),
+  answers: jsonb("answers").notNull(), // JSON object with question id -> answer
+  score: integer("score").notNull(),
+  passed: boolean("passed").default(false).notNull(),
+  submittedAt: timestamp("submitted_at").defaultNow(),
+});
+
+// Bookmarks - personal learning collections
+export const bookmarks = pgTable("bookmarks", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  topicId: integer("topic_id").references(() => topics.id, { onDelete: "cascade" }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Relations for new tables
+export const userProgressRelations = relations(userProgress, ({ one }) => ({
+  user: one(users, {
+    fields: [userProgress.userId],
+    references: [users.id],
+  }),
+  topic: one(topics, {
+    fields: [userProgress.topicId],
+    references: [topics.id],
+  }),
+}));
+
+export const assessmentSubmissionsRelations = relations(assessmentSubmissions, ({ one }) => ({
+  user: one(users, {
+    fields: [assessmentSubmissions.userId],
+    references: [users.id],
+  }),
+  assessment: one(assessments, {
+    fields: [assessmentSubmissions.assessmentId],
+    references: [assessments.id],
+  }),
+}));
+
+export const bookmarksRelations = relations(bookmarks, ({ one }) => ({
+  user: one(users, {
+    fields: [bookmarks.userId],
+    references: [users.id],
+  }),
+  topic: one(topics, {
+    fields: [bookmarks.topicId],
+    references: [topics.id],
+  }),
+}));
+
 // Schemas for validation
 export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
@@ -155,6 +219,22 @@ export const insertPrerequisiteSchema = createInsertSchema(prerequisites).omit({
   id: true,
 });
 
+export const insertUserProgressSchema = createInsertSchema(userProgress).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAssessmentSubmissionSchema = createInsertSchema(assessmentSubmissions).omit({
+  id: true,
+  submittedAt: true,
+});
+
+export const insertBookmarkSchema = createInsertSchema(bookmarks).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -172,10 +252,31 @@ export type InsertAssessment = z.infer<typeof insertAssessmentSchema>;
 export type Prerequisite = typeof prerequisites.$inferSelect;
 export type InsertPrerequisite = z.infer<typeof insertPrerequisiteSchema>;
 
+export type UserProgress = typeof userProgress.$inferSelect;
+export type InsertUserProgress = z.infer<typeof insertUserProgressSchema>;
+
+export type AssessmentSubmission = typeof assessmentSubmissions.$inferSelect;
+export type InsertAssessmentSubmission = z.infer<typeof insertAssessmentSubmissionSchema>;
+
+export type Bookmark = typeof bookmarks.$inferSelect;
+export type InsertBookmark = z.infer<typeof insertBookmarkSchema>;
+
 // Extended types for frontend
 export type TopicWithRelations = Topic & {
   lessons?: Lesson[];
   assessments?: Assessment[];
   prerequisites?: (Prerequisite & { prerequisiteTopic?: Topic })[];
   createdBy?: User;
+};
+
+export type UserProgressWithTopic = UserProgress & {
+  topic?: Topic;
+};
+
+export type AssessmentSubmissionWithDetails = AssessmentSubmission & {
+  assessment?: Assessment;
+};
+
+export type BookmarkWithTopic = Bookmark & {
+  topic?: Topic;
 };
