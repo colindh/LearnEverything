@@ -28,7 +28,7 @@ import {
   type BookmarkWithTopic,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, like, and, or, desc } from "drizzle-orm";
+import { eq, like, and, or, desc, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -38,6 +38,9 @@ export interface IStorage {
     mode?: LearningMode;
     search?: string;
     publishedOnly?: boolean;
+    difficulty?: string;
+    minDuration?: number;
+    maxDuration?: number;
   }): Promise<Topic[]>;
   getTopic(id: number): Promise<TopicWithRelations | undefined>;
   createTopic(topic: InsertTopic): Promise<Topic>;
@@ -115,6 +118,9 @@ export class DatabaseStorage implements IStorage {
     mode?: LearningMode;
     search?: string;
     publishedOnly?: boolean;
+    difficulty?: string;
+    minDuration?: number;
+    maxDuration?: number;
   }): Promise<Topic[]> {
     const conditions = [];
 
@@ -134,6 +140,18 @@ export class DatabaseStorage implements IStorage {
           like(topics.description, searchTerm)
         )
       );
+    }
+
+    if (options?.difficulty) {
+      conditions.push(eq(topics.difficulty, options.difficulty));
+    }
+
+    if (options?.minDuration !== undefined) {
+      conditions.push(gte(topics.estimatedMinutes, options.minDuration));
+    }
+
+    if (options?.maxDuration !== undefined) {
+      conditions.push(lte(topics.estimatedMinutes, options.maxDuration));
     }
 
     if (conditions.length === 0) {

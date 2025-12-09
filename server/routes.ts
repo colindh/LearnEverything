@@ -35,15 +35,26 @@ export async function registerRoutes(
     try {
       const mode = req.query.mode as LearningMode | undefined;
       const search = req.query.search as string | undefined;
+      const difficulty = req.query.difficulty as string | undefined;
+      const minDuration = req.query.minDuration ? parseInt(req.query.minDuration as string) : undefined;
+      const maxDuration = req.query.maxDuration ? parseInt(req.query.maxDuration as string) : undefined;
 
       if (mode && !learningModes.includes(mode)) {
         return res.status(400).json({ message: "Invalid mode" });
+      }
+
+      const validDifficulties = ["beginner", "intermediate", "advanced"];
+      if (difficulty && !validDifficulties.includes(difficulty)) {
+        return res.status(400).json({ message: "Invalid difficulty" });
       }
 
       const topics = await storage.getTopics({
         mode,
         search,
         publishedOnly: true,
+        difficulty,
+        minDuration: !isNaN(minDuration!) ? minDuration : undefined,
+        maxDuration: !isNaN(maxDuration!) ? maxDuration : undefined,
       });
       res.json(topics);
     } catch (error) {

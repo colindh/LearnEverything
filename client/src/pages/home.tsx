@@ -1,21 +1,55 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { ModeTabs } from "@/components/mode-tabs";
 import { TopicCard, TopicCardSkeleton } from "@/components/topic-card";
 import { Input } from "@/components/ui/input";
-import { Search, BookOpen, Frown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, BookOpen, Frown, Filter } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import type { Topic, LearningMode, UserProgressWithTopic } from "@shared/schema";
 
+type DifficultyFilter = "all" | "beginner" | "intermediate" | "advanced";
+type DurationFilter = "all" | "short" | "medium" | "long";
+
 export default function Home() {
   const [activeMode, setActiveMode] = useState<LearningMode | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [difficulty, setDifficulty] = useState<DifficultyFilter>("all");
+  const [duration, setDuration] = useState<DurationFilter>("all");
   const { isAuthenticated } = useAuth();
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const getDurationParams = (dur: DurationFilter) => {
+    switch (dur) {
+      case "short": return { minDuration: undefined, maxDuration: 30 };
+      case "medium": return { minDuration: 30, maxDuration: 60 };
+      case "long": return { minDuration: 60, maxDuration: undefined };
+      default: return { minDuration: undefined, maxDuration: undefined };
+    }
+  };
+
+  const { minDuration, maxDuration } = getDurationParams(duration);
+
   const { data: topics, isLoading } = useQuery<Topic[]>({
-    queryKey: ["/api/topics", { mode: activeMode !== "all" ? activeMode : undefined, search: searchQuery || undefined }],
+    queryKey: [
+      "/api/topics",
+      {
+        mode: activeMode !== "all" ? activeMode : undefined,
+        search: debouncedSearch || undefined,
+        difficulty: difficulty !== "all" ? difficulty : undefined,
+        minDuration,
+        maxDuration,
+      },
+    ],
   });
 
   const { data: userProgress } = useQuery<UserProgressWithTopic[]>({
@@ -24,11 +58,7 @@ export default function Home() {
   });
 
   const filteredTopics = topics?.filter((topic) => {
-    const matchesMode = activeMode === "all" || topic.mode === activeMode;
-    const matchesSearch = !searchQuery || 
-      topic.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      topic.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesMode && matchesSearch && topic.isPublished;
+    return topic.isPublished;
   });
 
   const topicIds = useMemo(() => filteredTopics?.map(t => t.id) || [], [filteredTopics]);
